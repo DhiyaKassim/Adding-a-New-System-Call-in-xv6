@@ -1,0 +1,106 @@
+diff --git a/Makefile b/Makefile
+index a26f3db..b897f94 100644
+--- a/Makefile
++++ b/Makefile
+@@ -133,6 +133,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
+ UPROGS=\
+ 	$U/_cat\
+ 	$U/_echo\
++	$U/_getprocs\
+ 	$U/_forktest\
+ 	$U/_grep\
+ 	$U/_init\
+diff --git a/kernel/defs.h b/kernel/defs.h
+index 0ae6896..3c4ec7b 100644
+--- a/kernel/defs.h
++++ b/kernel/defs.h
+@@ -184,3 +184,4 @@ void            virtio_disk_intr(void);
+ 
+ // number of elements in fixed-size array
+ #define NELEM(x) (sizeof(x) / sizeof((x)[0]))
++int getprocs(void);
+diff --git a/kernel/proc.c b/kernel/proc.c
+index 31f23a3..64f2c58 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -701,3 +701,18 @@ procdump(void)
+     printk("\n");
+   }
+ }
++int
++getprocs(void)
++{
++  struct proc *p;
++  int count = 0;
++
++  for(p = proc; p < &proc[NPROC]; p++){
++    acquire(&p->lock);
++   if(p->state == RUNNABLE || p->state == RUNNING)
++      count++;
++    release(&p->lock);
++  }
++
++  return count;
++}
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index 1800f20..7783526 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -103,7 +103,7 @@ extern uint64 sys_link(void);
+ extern uint64 sys_mkdir(void);
+ extern uint64 sys_close(void);
+ extern uint64 sys_sync(void);
+-
++extern uint64 sys_getprocs(void);
+ // An array mapping syscall numbers from syscall.h
+ // to the function that handles the system call.
+ static uint64 (*syscalls[])(void) = {
+@@ -130,6 +130,7 @@ static uint64 (*syscalls[])(void) = {
+   [SYS_mkdir]   = sys_mkdir,
+   [SYS_close]   = sys_close,
+   [SYS_sync]    = sys_sync,
++[SYS_getprocs] sys_getprocs,
+   // clang-format on
+ };
+ 
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index 5a4a39f..ce7310c 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -21,3 +21,5 @@
+ #define SYS_mkdir  20
+ #define SYS_close  21
+ #define SYS_sync   22
++
++#define SYS_getprocs 23
+diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+index cd25557..f75b21b 100644
+--- a/kernel/sysproc.c
++++ b/kernel/sysproc.c
+@@ -110,3 +110,8 @@ sys_uptime(void)
+   release(&tickslock);
+   return xticks;
+ }
++uint64
++sys_getprocs(void)
++{
++  return getprocs();
++}
+diff --git a/user/user.h b/user/user.h
+index 29aad59..cbd719b 100644
+--- a/user/user.h
++++ b/user/user.h
+@@ -48,3 +48,4 @@ void printf(const char *, ...) __attribute__((format(printf, 1, 2)));
+ // umalloc.c
+ void *malloc(uint);
+ void free(void *);
++int getprocs(void);
+diff --git a/user/usys.pl b/user/usys.pl
+index 4d054e8..dade732 100755
+--- a/user/usys.pl
++++ b/user/usys.pl
+@@ -43,3 +43,4 @@ entry("sbrk");
+ entry("pause");
+ entry("uptime");
+ entry("sync");
++entry("getprocs")
